@@ -11,7 +11,7 @@ Tutorial ini menggunakan **WinBox versi terbaru** (v3.x / v4.x) untuk mengkonfig
 |---|---|---|
 | Ether1 | WAN / Internet | DHCP Client (Use Peer DNS: **off**) |
 | Ether2 | Trunk ke Switch | Membawa VLAN 10, 20, 30 |
-| Ether3 | Management | Host Only — akses Winbox langsung dari PC Admin |
+| Ether3 | Management | Host Only — akses Winbox dari PC Admin via MAC-Winbox (tanpa IP) |
 
 | VLAN | IP Gateway | Fungsi |
 |---|---|---|
@@ -230,9 +230,58 @@ Buka menu **IP → Firewall → tab Filter Rules**. Tambahkan rule secara **beru
 
 ---
 
-### d. Izinkan Akses SSH/Winbox dari VLAN 10 & VLAN 30 (chain: input) — **HARUS PALING ATAS**
+> Mulai bagian d, semua rule memakai `chain=input` dan **urutan penambahannya harus persis seperti di bawah**. `/ip firewall filter add` otomatis menaruh rule baru di baris paling bawah, jadi cukup menambahkannya berurutan (tanpa `place-before`).
 
-⚠️ **Penting:** rule ini **wajib diletakkan paling atas** di chain `input`, **sebelum** rule logging dan mekanisme anti brute-force di bawah. Alasannya: kalau diletakkan di bawah, setiap kali admin dari VLAN10/VLAN30 melakukan reconnect Winbox berkali-kali (hal yang wajar terjadi saat sesi Winbox putus-nyambung), IP admin tersebut akan ikut tercatat naik bertahap oleh sistem staging (stage1 → stage2 → stage3 → **blacklist**) dan akhirnya **admin sendiri bisa terkunci** dari router. Dengan meletakkan rule accept ini paling atas, trafik dari VLAN10/VLAN30 langsung diterima tanpa pernah masuk ke sistem staging/blacklist sama sekali — mekanisme brute-force hanya akan menyaring percobaan dari VLAN20 atau sumber luar yang tidak sah.
+### d. Drop IP yang Sudah Masuk Blacklist — **PALING ATAS**
+
+```
+/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_blacklist action=drop comment="Drop brute force SSH/Winbox"
+```
+
+> Rule ini harus berada **di atas** rule accept VLAN 10/30 (bagian g). Kalau diletakkan di bawahnya, IP dari VLAN 10/30 yang sudah di-blacklist akan tetap diterima oleh rule accept sebelum sempat di-drop, sehingga blacklist tidak ada gunanya.
+
+### e. Logging Koneksi Baru SSH/Winbox
+
+```
+/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new action=log log-prefix="LOGIN-ATTEMPT: " comment="Log percobaan akses SSH/Winbox"
+```
+
+`connection-state=new` membuat log hanya mencatat koneksi baru, bukan setiap paket. Letaknya setelah rule d agar IP yang sudah diblokir tidak membanjiri log.
+
+Untuk melihat log: menu **Log** di WinBox, atau via terminal:
+```
+/log print
+```
+
+### f. Anti Brute-Force Bertahap
+
+Empat rule ini **harus berurutan dari stage tertinggi ke terendah**:
+
+```
+/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_stage3 action=add-src-to-address-list address-list=ssh_blacklist address-list-timeout=1d comment="Stage 3 ke blacklist"
+
+/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_stage2 action=add-src-to-address-list address-list=ssh_stage3 address-list-timeout=1m comment="Stage 2 ke stage3"
+
+/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_stage1 action=add-src-to-address-list address-list=ssh_stage2 address-list-timeout=1m comment="Stage 1 ke stage2"
+
+/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new action=add-src-to-address-list address-list=ssh_stage1 address-list-timeout=1m comment="Percobaan koneksi baru SSH/Winbox"
+```
+
+**Kenapa urutannya terbalik (rule "new → stage1" justru paling bawah)?** Action `add-src-to-address-list` tidak menghentikan pemrosesan, jadi paket yang sama lanjut ke rule berikutnya. Kalau `new → stage1` ditaruh paling atas, percobaan pertama langsung masuk stage1, lalu dipindah ke stage2, stage3, dan blacklist dalam satu paket. Dengan urutan terbalik, tiap paket hanya naik **satu tingkat**:
+
+| Percobaan (dalam ±1 menit) | Yang terjadi |
+|---|---|
+| 1 | Masuk `ssh_stage1` |
+| 2 | Naik ke `ssh_stage2` |
+| 3 | Naik ke `ssh_stage3` |
+| 4 | Masuk `ssh_blacklist` (1 hari) |
+| 5 dst. | Di-drop oleh rule d |
+
+> 💡 Address-list (`ssh_stage1`, `ssh_stage2`, `ssh_stage3`, `ssh_blacklist`) **tidak perlu dibuat manual**. RouterOS membuatnya otomatis saat ada traffic yang men-trigger action `add-src-to-address-list` pertama kali. Wajar kalau menu **IP → Firewall → Address Lists** kosong sebelum ada percobaan koneksi.
+
+### g. Izinkan Akses SSH/Winbox dari VLAN 10 & VLAN 30
+
+Rule accept diletakkan **setelah** staging. Dengan begitu percobaan login berulang dari VLAN 10/30 tetap terhitung sebagai brute-force, sedangkan login normal tidak terpengaruh.
 
 ```
 /ip firewall filter add chain=input protocol=tcp dst-port=22,8291 src-address=192.168.10.0/24 action=accept comment="Izinkan akses VLAN10 ke router"
@@ -240,43 +289,17 @@ Buka menu **IP → Firewall → tab Filter Rules**. Tambahkan rule secara **beru
 /ip firewall filter add chain=input protocol=tcp dst-port=22,8291 src-address=192.168.30.0/24 action=accept comment="Izinkan akses VLAN30 ke router"
 ```
 
-> 💡 Tidak perlu memakai opsi `place-before` — cukup **tambahkan rule ini duluan** (sebelum rule logging/staging di langkah e & f), karena `/ip firewall filter add` otomatis menaruh rule baru di baris paling bawah sesuai urutan penambahan. `place-before` justru berisiko salah, karena penomoran index di firewall MikroTik bersifat **global** (lintas semua chain), bukan khusus per-chain.
-
-⚠️ **Uji dulu sebelum logout!** Pastikan kamu masih terkoneksi dari VLAN 10 atau VLAN 30 (atau Ether3 Host-Only) sebelum melanjutkan ke rule drop di bagian f — kalau salah urutan, kamu bisa terkunci dari router.
-
-### e. Logging Percobaan Akses SSH/Winbox (chain: input)
+⚠️ **Konsekuensinya:** admin yang membuka 4 koneksi baru ke SSH/Winbox dalam ±1 menit akan ikut masuk blacklist selama 1 hari. Kalau terkunci, sambungkan lewat **MAC-Winbox** (Winbox → tab **Neighbors** → klik MAC Address router), lalu hapus blacklist:
 
 ```
-/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 action=log log-prefix="LOGIN-ATTEMPT: " comment="Log percobaan akses SSH/Winbox"
+/ip firewall address-list remove [find list=ssh_blacklist]
 ```
 
-Untuk melihat log: menu **Log** di WinBox, atau via terminal:
-```
-/log print
-```
+MAC-Winbox bekerja di layer 2 sehingga **tidak terkena** firewall ini. Akses lewat IP di Ether3 (Host-Only) **tidak diizinkan** oleh rule ini, karena Ether3 bukan VLAN 10/30.
 
-### f. Amankan Brute-Force Login (chain: input)
-Buat rule berurutan untuk mendeteksi & blok percobaan login berulang dari sumber yang **belum** diterima oleh rule accept VLAN10/30 di atas:
+### h. Blok Semua Akses SSH/Winbox Lainnya — paling bawah
 
-```
-/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_blacklist action=drop comment="Drop brute force SSH/Winbox"
-
-/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_stage3 action=add-src-to-address-list address-list=ssh_blacklist address-list-timeout=1d comment="Stage 3 to blacklist"
-
-/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_stage2 action=add-src-to-address-list address-list=ssh_stage3 address-list-timeout=1m comment="Stage 2 to stage3"
-
-/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new src-address-list=ssh_stage1 action=add-src-to-address-list address-list=ssh_stage2 address-list-timeout=1m comment="Stage 1 to stage2"
-
-/ip firewall filter add chain=input protocol=tcp dst-port=22,8291 connection-state=new action=add-src-to-address-list address-list=ssh_stage1 address-list-timeout=1m comment="New connection attempt"
-```
-
-**Cara kerja:** setiap percobaan koneksi baru ke port SSH (22) atau Winbox (8291) **yang tidak berasal dari VLAN10/VLAN30** (karena sudah di-accept duluan di rule d) akan dicatat bertahap (stage1 → stage2 → stage3). Jika IP yang sama mencoba lagi dalam rentang waktu singkat, IP tersebut otomatis masuk **blacklist** dan diblokir selama 1 hari.
-
-> 💡 **Catatan:** address-list (`ssh_stage1`, `ssh_stage2`, `ssh_stage3`, `ssh_blacklist`) **tidak perlu dibuat manual** di menu Address Lists. RouterOS otomatis membuatnya begitu ada traffic yang men-trigger action `add-src-to-address-list` pertama kali. Jadi wajar kalau menu **IP → Firewall → Address Lists** masih kosong sebelum ada percobaan koneksi.
-
-### g. Blok Semua Akses SSH/Winbox Selain VLAN 10 & VLAN 30 (chain: input) — paling bawah
-
-Rule penutup (catch-all) di bagian paling bawah chain input untuk port SSH/Winbox:
+Rule penutup (catch-all). Pastikan kamu masih terhubung dari VLAN 10/30 sebelum menambahkannya.
 
 ```
 /ip firewall filter add chain=input protocol=tcp dst-port=22,8291 action=drop comment="Blok akses SSH/Winbox selain VLAN10 & VLAN30"
@@ -286,15 +309,15 @@ Rule penutup (catch-all) di bagian paling bawah chain input untuk port SSH/Winbo
 
 | # | Rule | Alasan urutan |
 |---|---|---|
-| 1 | Accept VLAN10 → router | Wajib paling atas, hindari admin ikut ter-blacklist saat reconnect |
-| 2 | Accept VLAN30 → router | Sama seperti di atas |
-| 3 | Log percobaan akses SSH/Winbox | Mencatat sisa traffic yang bukan dari VLAN10/30 |
-| 4 | Drop jika src di `ssh_blacklist` | Traffic yang sudah lolos ke titik ini otomatis bukan dari VLAN10/30 |
-| 5 | Stage3 → blacklist | Eskalasi bertahap |
-| 6 | Stage2 → stage3 | Eskalasi bertahap |
-| 7 | Stage1 → stage2 | Eskalasi bertahap |
-| 8 | New connection → stage1 | Awal pencatatan percobaan baru |
-| 9 | Drop semua sisanya (catch-all) | Penutup, blok semua yang tidak match rule di atas |
+| 1 | Drop jika src di `ssh_blacklist` | Di atas accept, agar blacklist berlaku juga untuk VLAN 10/30 |
+| 2 | Log koneksi baru SSH/Winbox | Setelah drop blacklist, agar IP yang diblokir tidak membanjiri log |
+| 3 | Stage3 → blacklist | Stage tertinggi dulu, agar tiap paket hanya naik satu tingkat |
+| 4 | Stage2 → stage3 | Sama |
+| 5 | Stage1 → stage2 | Sama |
+| 6 | New connection → stage1 | Harus paling bawah dari empat rule staging |
+| 7 | Accept VLAN10 → router | Setelah staging, agar login berulang tetap terhitung |
+| 8 | Accept VLAN30 → router | Sama |
+| 9 | Drop semua sisanya (catch-all) | Penutup: blok semua sumber selain VLAN 10/30 |
 
 ---
 
@@ -317,6 +340,15 @@ Uji dari sisi client:
 - Server di VLAN 30 **bisa** ping ke VLAN 10 (Guru) ✅
 - Client VLAN 10/20 mendapat IP otomatis dari DHCP ✅
 - Winbox/SSH ke router dari VLAN 20 **ditolak**, dari VLAN 10/30 **berhasil** ✅
+
+**Uji brute-force** (dari VM Server di VLAN 30):
+```bash
+for i in 1 2 3 4 5; do nc -zv -w 2 192.168.30.1 22; done
+```
+Lalu di router, buka **IP → Firewall → Address Lists** (atau `/ip firewall address-list print`). IP `192.168.30.10` harus muncul di `ssh_blacklist`. Setelah uji, bersihkan agar Server tidak terblokir 1 hari:
+```
+/ip firewall address-list remove [find list=ssh_blacklist]
+```
 
 ---
 
