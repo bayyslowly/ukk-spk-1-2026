@@ -1,5 +1,5 @@
 # Setup Server Manual — UKK TKJ 2026 SPK Paket 1
-## Ubuntu Server 24.04 LTS
+## Ubuntu Server 24.04 LTS — Tanpa Bash Script (Full Manual)
 
 Server ini akan menjalankan 3 layanan: **DNS (bind9)**, **Web (nginx + HTTPS)**, dan **Monitoring (netdata + SNMP router)**, sesuai topologi VLAN 30 (`192.168.30.10/24`).
 
@@ -70,7 +70,7 @@ ping -c 4 8.8.8.8        # tes internet
 
 ```bash
 sudo apt update -y
-# sudo apt upgrade -y (opsional yaaaa)
+sudo apt upgrade -y
 ```
 
 ---
@@ -95,24 +95,17 @@ Ganti seluruh isinya menjadi:
 
 ```
 acl "allowed-recursion" {
-    192.168.10.0/24; // Tambahkan VLAN 10 agar Guru tetap bisa ke internetan
     192.168.30.0/24;
+    192.168.10.0/24;
     localhost;
 };
 
 options {
     directory "/var/cache/bind";
 
-    // Aktifkan rekursi
     recursion yes;
-
-    // Gunakan tanda kutip ganda pada nama ACL
-    allow-recursion { "allowed-recursion"; };
-
+    allow-recursion { allowed-recursion; };
     // VLAN 20 (192.168.20.0/24) tidak termasuk allowed-recursion -> otomatis ditolak
-
-    // WAJIB ditambahkan: Mengunci cache agar VLAN 20 tidak bisa mengintip cache
-    allow-query-cache { "allowed-recursion"; };
 
     listen-on { any; };
     listen-on-v6 { any; };
@@ -191,6 +184,12 @@ dig @192.168.30.10 lab-smk.xyz
 dig @192.168.30.10 monitor.lab-smk.xyz
 ```
 
+Tes recursion (domain luar). Dari server/VLAN 30 dan Guru/VLAN 10 harus berhasil, sedangkan dari Siswa/VLAN 20 harus **REFUSED**:
+
+```bash
+dig @192.168.30.10 google.com
+```
+
 ---
 
 ## 4. Instalasi & Konfigurasi Web Server (nginx + HTTPS)
@@ -222,7 +221,7 @@ Isi:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPK Paket 1 - Lab SMK Negeri 1 Banyumas</title>
+    <title>SPK Paket 1 - Lab SMK</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -270,7 +269,7 @@ Isi:
 
     <section id="kontak" class="section">
         <h2>Kontak</h2>
-        <p>Admin Lab SMK Negeri 1 Banyumas &mdash; admin@lab-smk.xyz</p>
+        <p>Admin Lab SMK &mdash; admin@lab-smk.xyz</p>
     </section>
 
     <footer>
@@ -468,7 +467,10 @@ sudo chown -R www-data:www-data /var/www/lab-smk.xyz
 ### 4.7 Buat Sertifikat SSL Self-Signed
 
 ```bash
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/lab-smk.xyz.key -out /etc/nginx/ssl/lab-smk.xyz.crt -subj "/C=ID/ST=JawaTengah/L=Purwokerto/O=SMK/OU=TKJ/CN=lab-smk.xyz"
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/nginx/ssl/lab-smk.xyz.key \
+    -out /etc/nginx/ssl/lab-smk.xyz.crt \
+    -subj "/C=ID/ST=JawaTengah/L=Purwokerto/O=SMK/OU=TKJ/CN=lab-smk.xyz"
 ```
 
 ### 4.8 Buat Virtual Host Nginx (HTTP → HTTPS)
@@ -735,7 +737,7 @@ snmpwalk -v2c -c public 192.168.30.1 system
 
 - [ ] IP Static `192.168.30.10/24` aktif & bisa akses internet
 - [ ] `dig lab-smk.xyz` mengembalikan `192.168.30.10`
-- [ ] `dig` dari VLAN 20 untuk domain luar (recursive) **ditolak**
+- [ ] `dig` dari VLAN 20 untuk domain luar (recursive) **ditolak** (status: REFUSED), sedangkan dari VLAN 10 dan VLAN 30 **berhasil**
 - [ ] `https://lab-smk.xyz` menampilkan landing page (index.html, style.css, script.js)
 - [ ] `https://monitor.lab-smk.xyz` menampilkan dashboard Netdata (HTTPS, bukan HTTP)
 - [ ] Dashboard monitoring menampilkan 2 host: **server** dan **router** (CPU/Memory)
