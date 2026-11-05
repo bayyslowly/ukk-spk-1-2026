@@ -183,8 +183,8 @@ Jika ingin tetap satu bridge, buat VLAN manajemen terpisah (misal VLAN 99) khusu
 
 ```
 /ip service disable telnet,ftp,www,api,api-ssl
-/ip service set ssh address=192.168.100.0/24
-/ip service set winbox address=192.168.100.0/24
+/ip service set ssh address=192.168.10.0/24,192.168.30.0/24
+/ip service set winbox address=192.168.10.0/24,192.168.30.0/24
 ```
 
 ### b.2 Zona waktu
