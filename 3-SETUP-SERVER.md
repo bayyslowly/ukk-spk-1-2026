@@ -467,10 +467,7 @@ sudo chown -R www-data:www-data /var/www/lab-smk.xyz
 ### 4.7 Buat Sertifikat SSL Self-Signed
 
 ```bash
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/nginx/ssl/lab-smk.xyz.key \
-    -out /etc/nginx/ssl/lab-smk.xyz.crt \
-    -subj "/C=ID/ST=JawaTengah/L=Purwokerto/O=SMK/OU=TKJ/CN=lab-smk.xyz"
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/lab-smk.xyz.key -out /etc/nginx/ssl/lab-smk.xyz.crt -subj "/C=ID/ST=JawaTengah/L=Purwokerto/O=SMK/OU=TKJ/CN=lab-smk.xyz"
 ```
 
 ### 4.8 Buat Virtual Host Nginx (HTTP → HTTPS)
