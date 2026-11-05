@@ -28,7 +28,7 @@ fi
 # ================= VARIABEL KONFIGURASI =================
 IP_ADDRESS="192.168.30.10"    # harus sama dengan IP static yang sudah diset manual
 DOMAIN="lab-smk.xyz"
-ALLOWED_RECURSION_NET="192.168.30.0/24; 192.168.10.0/24"   # hanya VLAN 30 boleh recursive query
+ALLOWED_RECURSION_NETS="192.168.30.0/24; 192.168.10.0/24"   # VLAN 30 & VLAN 10 boleh recursive query (VLAN 20 tidak)
 WEBROOT="/var/www/${DOMAIN}"
 
 ROUTER_IP="192.168.30.1"       # IP Router MikroTik (VLAN 30) - SNMP client harus sudah "on"
@@ -56,16 +56,16 @@ echo "   OK - IP: ${CURRENT_IP}, internet: terkoneksi."
 
 # ================= 1. UPDATE SISTEM =================
 echo ">> [1/5] Update repository & sistem..."
-apt update -y # opsional yaaaa tambahin iniiii    && apt upgrade -y
+apt update -y && apt upgrade -y
 
 # ================= 2. INSTALL & KONFIGURASI BIND9 (DNS SERVER) =================
 echo ">> [2/5] Install & konfigurasi BIND9 (DNS Server)..."
 apt install -y bind9 bind9utils bind9-doc dnsutils
 
-# --- named.conf.options : disable recursion untuk VLAN 20, izinkan VLAN 30 ---
+# --- named.conf.options : disable recursion untuk VLAN 20, izinkan VLAN 10 & VLAN 30 ---
 cat > /etc/bind/named.conf.options <<EOF
 acl "allowed-recursion" {
-    ${ALLOWED_RECURSION_NET};
+    ${ALLOWED_RECURSION_NETS};
     localhost;
 };
 
@@ -73,10 +73,9 @@ options {
     directory "/var/cache/bind";
 
     recursion yes;
-    allow-recursion { "allowed-recursion"; };
+    allow-recursion { allowed-recursion; };
     // VLAN 20 (192.168.20.0/24) tidak termasuk allowed-recursion -> otomatis ditolak
-    allow-query-cache { "allowed-recursion"; };
-    
+
     listen-on { any; };
     listen-on-v6 { any; };
 
@@ -134,7 +133,7 @@ cat > "${WEBROOT}/index.html" <<'HTMLEOF'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPK Paket 1 - Lab SMK Negeri 1 Banyumas</title>
+    <title>SPK Paket 1 - Lab SMK</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -157,7 +156,7 @@ cat > "${WEBROOT}/index.html" <<'HTMLEOF'
 
     <section id="tentang" class="section">
         <h2>Tentang Topologi</h2>
-        <p>Server ini merupakan bagian dari topologi UKK TJKT/TKJ SPK Paket 1, dengan
+        <p>Server ini merupakan bagian dari topologi UKK TKJ SPK Paket 1, dengan
         layanan DNS, Web Server, dan Monitoring yang berjalan pada satu VM Ubuntu/Debian
         di VLAN 30 (192.168.30.10/24).</p>
     </section>
@@ -182,11 +181,11 @@ cat > "${WEBROOT}/index.html" <<'HTMLEOF'
 
     <section id="kontak" class="section">
         <h2>Kontak</h2>
-        <p>Admin Lab SMK Negeri 1 Banyumas &mdash; admin@lab-smk.xyz</p>
+        <p>Admin Lab SMK &mdash; admin@lab-smk.xyz</p>
     </section>
 
     <footer>
-        <p>&copy; 2026 UKK TJKT/TKJ - SPK Paket 1</p>
+        <p>&copy; 2026 UKK TKJ - SPK Paket 1</p>
     </footer>
 
     <script src="script.js"></script>
