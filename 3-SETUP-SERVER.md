@@ -36,7 +36,7 @@ Isi/edit file netplan menjadi:
 network:
   version: 2
   ethernets:
-    ens18:                      # ganti sesuai nama interface asli hasil 'ip a'
+    ens33:                      # ganti sesuai nama interface asli hasil 'ip a'
       dhcp4: no
       addresses:
         - 192.168.30.10/24
