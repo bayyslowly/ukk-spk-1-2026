@@ -31,19 +31,19 @@ SOP ini mengatur langkah penanganan insiden pada router, server, dan jaringan VL
 
 **Deteksi.** Tanda-tandanya:
 - Log router berisi banyak entri `LOGIN-ATTEMPT` dari IP yang sama.
-- Daftar `ssh_stage1`, `ssh_stage2`, `ssh_stage3`, atau `ssh_blacklist` terisi.
+- Daftar `ssh_stage1`, `ssh_stage2`, `ssh_stage3`, atau `blacklist` terisi.
 
 **Langkah penanganan:**
 
 1. **Konfirmasi insiden.** Di Terminal Winbox:
    ```
-   /ip firewall address-list print where list~"ssh_"
+   /ip firewall address-list print
    /log print where message~"LOGIN-ATTEMPT"
    ```
 2. **Identifikasi sumber.** Catat IP penyerang, tentukan VLAN asalnya (192.168.10.x = Guru, 192.168.20.x = Siswa, 192.168.30.x = Server), lalu cari perangkat dan penggunanya.
-3. **Tahan serangan.** IP yang mencoba 4 koneksi baru dalam ±1 menit otomatis masuk `ssh_blacklist` selama 1 hari. Untuk memblokir permanen:
+3. **Tahan serangan.** IP yang mencoba 4 koneksi baru dalam ±1 menit otomatis masuk `blacklist` selama 1 hari. Untuk memblokir permanen:
    ```
-   /ip firewall address-list add list=ssh_blacklist address=192.168.20.50 comment="Blok manual - brute force"
+   /ip firewall address-list add list=blacklist address=192.168.20.50 comment="Blok manual - brute force"
    ```
    *(ganti alamat dengan IP penyerang)*
 4. **Periksa apakah ada login berhasil:**
@@ -56,9 +56,9 @@ SOP ini mengatur langkah penanganan insiden pada router, server, dan jaringan VL
    Waspadai akun baru yang tidak dikenal atau layanan yang aktif tanpa izin.
 5. **Jika ada indikasi login berhasil** (Tingkat Tinggi): ganti password semua akun, ganti community SNMP, bandingkan konfigurasi dengan backup terakhir (`/export`), lalu **eskalasi ke Level 2**.
 6. **Tindak lanjut pengguna:** panggil dan edukasi pemilik perangkat, periksa apakah perangkat terinfeksi, dan terapkan sanksi sesuai kebijakan.
-7. **Pulihkan akses administrator jika terkunci.** Sambungkan lewat MAC-Winbox (tab **Neighbors**, klik MAC Address router), lalu hapus entri administrator saja:
+7. **Pulihkan akses administrator jika terkunci.** Sambungkan lewat MAC-Winbox dari PC Admin di jalur Host-Only/Ether3 (tab **Neighbors**, klik MAC Address router), lalu hapus entri administrator saja:
    ```
-   /ip firewall address-list remove [find list=ssh_blacklist address=192.168.10.5]
+   /ip firewall address-list remove [find list=blacklist address=192.168.10.5]
    ```
 8. **Catat laporan** (lihat bagian 6).
 
