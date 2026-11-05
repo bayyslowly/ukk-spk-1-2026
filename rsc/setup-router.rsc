@@ -194,7 +194,20 @@ Ulangi langkah yang sama dengan:
 
 Buka menu **IP → Firewall → tab Filter Rules**. Tambahkan rule secara **berurutan** (urutan sangat penting — firewall MikroTik memproses rule dari atas ke bawah / top-down!):
 
-### a. Izinkan VLAN 30 akses ke VLAN 10 (chain: forward)
+### a. Izinkan Balasan Koneksi dan VLAN 30 akses ke VLAN 10 (chain: forward)
+
+**a.1 — Izinkan koneksi established/related (paling atas chain forward)**
+- **Chain**: `forward`
+- **Connection State**: `established, related`
+- **Action**: `accept`
+
+```
+/ip firewall filter add chain=forward connection-state=established,related action=accept comment="Izinkan established/related"
+```
+
+> Tanpa rule ini, Guru **tidak bisa** ping ke Siswa: permintaan ping Guru → Siswa lolos, tetapi balasan Siswa → Guru cocok dengan rule blok VLAN 20 → VLAN 10 (rule c) dan ikut terdrop. Dengan rule ini, yang diblok hanya koneksi **baru** dari Siswa ke Guru, sedangkan Guru → Siswa tetap berjalan normal.
+
+**a.2 — Izinkan VLAN 30 akses ke VLAN 10**
 - **Chain**: `forward`
 - **Src. Address**: `192.168.30.0/24`
 - **Dst. Address**: `192.168.10.0/24`
@@ -226,7 +239,7 @@ Buka menu **IP → Firewall → tab Filter Rules**. Tambahkan rule secara **beru
 /ip firewall filter add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 action=drop comment="Blok VLAN20 ke VLAN10"
 ```
 
-> ⚠️ Urutan a → b → c di atas **wajib** seperti ini: accept VLAN30 duluan, baru log, baru drop VLAN20. Karena keduanya beda subnet source, urutan antar rule VLAN30 dan VLAN20 sebenarnya tidak saling mempengaruhi, tapi tetap disusun begini agar konsisten dan mudah dibaca top-down.
+> ⚠️ Urutan a → b → c di atas **wajib** seperti ini: established/related dan accept VLAN30 duluan, baru log, baru drop VLAN20. Karena keduanya beda subnet source, urutan antar rule VLAN30 dan VLAN20 sebenarnya tidak saling mempengaruhi, tapi tetap disusun begini agar konsisten dan mudah dibaca top-down.
 
 ---
 
@@ -335,8 +348,13 @@ Cek semua konfigurasi berjalan dengan baik:
 /ping 8.8.8.8                  → tes koneksi internet dari router
 ```
 
-Uji dari sisi client:
+Uji dari sisi client (**penting:** Windows 7 memblok ping masuk secara default, jadi izinkan ICMP di Guru dan Siswa lebih dulu agar hasil uji benar-benar menguji firewall router, bukan firewall Windows):
+```
+netsh advfirewall firewall add rule name="Allow ICMPv4-In" protocol=icmpv4:8,any dir=in action=allow
+```
+
 - PC di VLAN 20 (Siswa) **tidak bisa** ping ke VLAN 10 (Guru) ✅
+- PC di VLAN 10 (Guru) **bisa** ping ke VLAN 20 (Siswa) ✅
 - Server di VLAN 30 **bisa** ping ke VLAN 10 (Guru) ✅
 - Client VLAN 10/20 mendapat IP otomatis dari DHCP ✅
 - Winbox/SSH ke router dari VLAN 20 **ditolak**, dari VLAN 10/30 **berhasil** ✅
