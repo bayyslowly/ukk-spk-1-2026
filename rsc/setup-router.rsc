@@ -73,9 +73,9 @@ add name=Server vlan-id=30 interface=ether2 comment="VLAN Server"
 # 5. PENGALAMATAN IP TIAP VLAN
 # ---------------------------------------------------------------------
 /ip address
-add address=192.168.10.1/24 interface=vlan10 comment="Gateway VLAN 10 - Guru"
-add address=192.168.20.1/24 interface=vlan20 comment="Gateway VLAN 20 - Siswa"
-add address=192.168.30.1/24 interface=vlan30 comment="Gateway VLAN 30 - Server"
+add address=192.168.10.1/24 interface=Guru_Admin comment="Gateway VLAN 10 - Guru"
+add address=192.168.20.1/24 interface=Siswa comment="Gateway VLAN 20 - Siswa"
+add address=192.168.30.1/24 interface=Server comment="Gateway VLAN 30 - Server"
 
 # ---------------------------------------------------------------------
 # 6. DHCP SERVER UNTUK VLAN 10 (GURU) DAN VLAN 20 (SISWA)
@@ -86,8 +86,8 @@ add name=pool-vlan10 ranges=192.168.10.10-192.168.10.254
 add name=pool-vlan20 ranges=192.168.20.10-192.168.20.254
 
 /ip dhcp-server
-add name=dhcp-vlan10 interface=vlan10 address-pool=pool-vlan10 disabled=no
-add name=dhcp-vlan20 interface=vlan20 address-pool=pool-vlan20 disabled=no
+add name=dhcp-vlan10 interface=Guru_Admin address-pool=pool-vlan10 disabled=no
+add name=dhcp-vlan20 interface=Siswa address-pool=pool-vlan20 disabled=no
 
 /ip dhcp-server network
 add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=192.168.30.10,8.8.8.8
