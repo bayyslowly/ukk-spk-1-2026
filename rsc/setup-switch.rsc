@@ -102,8 +102,8 @@ add address=192.168.100.1/24 interface=ether5 comment="Management Winbox - Host 
 # ---------------------------------------------------------------------
 /ip service
 disable telnet,ftp,www,api,api-ssl
-set ssh address=192.168.100.0/24
-set winbox address=192.168.100.0/24
+set ssh address=192.168.10.0/24,192.168.30.0/24
+set winbox address=192.168.10.0/24,192.168.30.0/24
 
 /system clock
 set time-zone-name=Asia/Jakarta
