@@ -92,17 +92,17 @@ Router akan dipantau oleh server monitoring (Netdata) via SNMP.
 2. Klik **`+`** (Add) untuk masing-masing VLAN:
 
 **VLAN 10:**
-- **Name**: `vlan10`
+- **Name**: `Guru_Admin`
 - **VLAN ID**: `10`
 - **Interface**: `ether2`
 
 **VLAN 20:**
-- **Name**: `vlan20`
+- **Name**: `Siswa`
 - **VLAN ID**: `20`
 - **Interface**: `ether2`
 
 **VLAN 30:**
-- **Name**: `vlan30`
+- **Name**: `Server`
 - **VLAN ID**: `30`
 - **Interface**: `ether2`
 
@@ -110,9 +110,9 @@ Router akan dipantau oleh server monitoring (Netdata) via SNMP.
 
 **Terminal equivalent:**
 ```
-/interface vlan add name=vlan10 vlan-id=10 interface=ether2
-/interface vlan add name=vlan20 vlan-id=20 interface=ether2
-/interface vlan add name=vlan30 vlan-id=30 interface=ether2
+/interface vlan add name=Guru_Admin vlan-id=10 interface=ether2
+/interface vlan add name=Siswa vlan-id=20 interface=ether2
+/interface vlan add name=Server vlan-id=30 interface=ether2
 ```
 
 ---
@@ -124,15 +124,15 @@ Router akan dipantau oleh server monitoring (Netdata) via SNMP.
 
 | Address | Network | Interface |
 |---|---|---|
-| 192.168.10.1/24 | 192.168.10.0 | vlan10 |
-| 192.168.20.1/24 | 192.168.20.0 | vlan20 |
-| 192.168.30.1/24 | 192.168.30.0 | vlan30 |
+| 192.168.10.1/24 | 192.168.10.0 | Guru_Admin |
+| 192.168.20.1/24 | 192.168.20.0 | Siswa |
+| 192.168.30.1/24 | 192.168.30.0 | Server |
 
 **Terminal equivalent:**
 ```
-/ip address add address=192.168.10.1/24 interface=vlan10
-/ip address add address=192.168.20.1/24 interface=vlan20
-/ip address add address=192.168.30.1/24 interface=vlan30
+/ip address add address=192.168.10.1/24 interface=Guru_Admin
+/ip address add address=192.168.20.1/24 interface=Siswa
+/ip address add address=192.168.30.1/24 interface=Guru
 ```
 
 ---
@@ -143,7 +143,7 @@ Gunakan **DHCP Setup Wizard** agar lebih cepat.
 
 ### DHCP Server VLAN 10 (Guru)
 1. Buka menu **IP → DHCP Server → DHCP Setup**.
-2. **DHCP Server Interface**: `vlan10` → Next
+2. **DHCP Server Interface**: `Guru_Admin` → Next
 3. **DHCP Address Space**: `192.168.10.0/24` → Next
 4. **Gateway for DHCP Network**: `192.168.10.1` → Next
 5. **Addresses to Give Out**: `192.168.10.10-192.168.10.254` → Next
@@ -152,7 +152,7 @@ Gunakan **DHCP Setup Wizard** agar lebih cepat.
 
 ### DHCP Server VLAN 20 (Siswa)
 Ulangi langkah yang sama dengan:
-- Interface: `vlan20`
+- Interface: `Siswa`
 - Address Space: `192.168.20.0/24`
 - Gateway: `192.168.20.1`
 - Pool: `192.168.20.10-192.168.20.254`
@@ -160,11 +160,11 @@ Ulangi langkah yang sama dengan:
 **Terminal equivalent (ringkas, tanpa wizard):**
 ```
 /ip pool add name=pool-vlan10 ranges=192.168.10.10-192.168.10.254
-/ip dhcp-server add name=dhcp-vlan10 interface=vlan10 address-pool=pool-vlan10 disabled=no
+/ip dhcp-server add name=dhcp-vlan10 interface=Guru_Admin address-pool=pool-vlan10 disabled=no
 /ip dhcp-server network add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=192.168.30.10,8.8.8.8
 
 /ip pool add name=pool-vlan20 ranges=192.168.20.10-192.168.20.254
-/ip dhcp-server add name=dhcp-vlan20 interface=vlan20 address-pool=pool-vlan20 disabled=no
+/ip dhcp-server add name=dhcp-vlan20 interface=siswa address-pool=pool-vlan20 disabled=no
 /ip dhcp-server network add address=192.168.20.0/24 gateway=192.168.20.1 dns-server=192.168.30.10,8.8.8.8
 ```
 
@@ -339,7 +339,7 @@ Rule penutup (catch-all). Pastikan kamu masih terhubung dari VLAN 10/30 sebelum 
 Cek semua konfigurasi berjalan dengan baik:
 
 ```
-/interface vlan print          → pastikan vlan10, vlan20, vlan30 aktif
+/interface vlan print          → pastikan Guru_Admin (vlan10), Siswa (vlan20), Server (vlan30) aktif
 /ip address print              → pastikan IP tiap VLAN sudah benar
 /ip dhcp-server print          → pastikan DHCP vlan10 & vlan20 running
 /ip firewall filter print      → cek urutan rule firewall (pastikan urutan sesuai tabel di atas)
