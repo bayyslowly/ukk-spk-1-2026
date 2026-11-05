@@ -24,15 +24,25 @@
 #  - Jalankan script ini pada router yang MASIH KOSONG / default config
 #    supaya tidak bentrok dengan konfigurasi lama.
 #  - Rule firewall membatasi SSH/Winbox (port TCP 22/8291) HANYA dari
-#    VLAN 10 & VLAN 30. Ether3 (Host-Only) tidak punya IP di script ini,
-#    jadi akses lewat Ether3 dilakukan dengan MAC-Winbox (Winbox ->
-#    tab Neighbors -> klik MAC Address). MAC-Winbox bekerja di layer 2
-#    dan TIDAK terpengaruh firewall IP ini, jadi aman dipakai untuk
-#    menyambung ulang jika terkunci.
+#    VLAN 10 & VLAN 30. Ether3 (Host-Only) tidak punya IP di script ini.
+#    Akses lewat Ether3 dilakukan dengan MAC-Winbox (Winbox -> tab
+#    Neighbors -> klik MAC Address). MAC-Winbox bekerja di layer 2 dan
+#    TIDAK terpengaruh firewall IP, tetapi script ini membatasinya hanya
+#    untuk interface Guru_Admin, Server, dan ether3 (bagian 10), sehingga
+#    Siswa (VLAN 20) tidak bisa mengaksesnya.
+#  - PENTING: jalankan /import dari ether3 (MAC-Winbox) atau dari IP
+#    VLAN 10/30. Sesi MAC-Winbox lewat interface lain (mis. ether1) akan
+#    terputus setelah bagian 10 diterapkan.
+#  - Siswa (VLAN 20) hanya boleh mengakses Server (VLAN 30), tanpa
+#    Internet (bagian 8, rule c2 dan c3).
 #  - Brute-force protection berlaku juga untuk VLAN 10/30: 4 koneksi
 #    baru ke SSH/Winbox dalam +-1 menit akan memasukkan IP ke blacklist
-#    selama 1 hari. Jika admin terblokir, sambungkan via MAC-Winbox lalu:
-#    /ip firewall address-list remove [find list=ssh_blacklist]
+#    selama 1 hari. Jika admin terblokir, sambungkan via MAC-Winbox
+#    (dari ether3) lalu:
+#    /ip firewall address-list remove [find list=blacklist]
+#  - Password admin TIDAK diatur oleh script ini (agar tidak tersimpan
+#    di GitHub). Setelah import, jalankan manual:
+#    /user set admin password="PASSWORD-KUAT-ANDA"
 # =====================================================================
 
 :log info "=== MEMULAI IMPORT KONFIGURASI ROUTER - SPK PAKET 1 ==="
@@ -94,7 +104,7 @@ add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=192.168.30.10,8.8.8.
 add address=192.168.20.0/24 gateway=192.168.20.1 dns-server=192.168.30.10,8.8.8.8
 
 # ---------------------------------------------------------------------
-# 7. NAT MASQUERADE (AKSES INTERNET UNTUK SEMUA VLAN)
+# 7. NAT MASQUERADE (AKSES INTERNET; Siswa/VLAN 20 diblok di firewall, bagian 8 c3)
 # ---------------------------------------------------------------------
 /ip firewall nat
 add chain=srcnat out-interface=ether1 action=masquerade comment="NAT Masquerade - Internet"
@@ -113,6 +123,13 @@ add chain=srcnat out-interface=ether1 action=masquerade comment="NAT Masquerade 
 #    (b) Log percobaan VLAN 20 -> VLAN 10 (harus SEBELUM drop, karena
 #        action log tidak menghentikan proses)
 #    (c) Blok VLAN 20 -> VLAN 10
+#    (c2) Izinkan VLAN 20 (Siswa) -> VLAN 30 (Server): satu-satunya
+#        tujuan yang boleh dijangkau Siswa.
+#    (c3) Blok VLAN 20 -> tujuan lain (termasuk Internet). Harus SETELAH
+#        c2 karena RouterOS memproses dari atas ke bawah. Sengaja tanpa
+#        log: Windows terus menghubungi internet di latar belakang dan
+#        akan memenuhi log memori (1000 baris), sehingga log penting
+#        (BLOCKED-VLAN20, LOGIN-ATTEMPT) tergeser.
 #
 #    Chain INPUT (akses SSH/Winbox ke router), dari atas ke bawah:
 #    (d) Drop IP yang sudah di blacklist - PALING ATAS, supaya blacklist
@@ -148,23 +165,31 @@ add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 \
 add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 \
     action=drop comment="Blok VLAN20 ke VLAN10"
 
+# (c2) Izinkan VLAN 20 (Siswa) akses ke VLAN 30 (Server)
+add chain=forward src-address=192.168.20.0/24 dst-address=192.168.30.0/24 \
+    action=accept comment="Izinkan VLAN20 ke Server"
+
+# (c3) Blok VLAN 20 ke tujuan lain, termasuk Internet (tanpa log)
+add chain=forward src-address=192.168.20.0/24 action=drop \
+    comment="Blok VLAN20 ke selain Server (tanpa Internet)"
+
 # --- Chain INPUT: akses SSH/Winbox ke router ---
 
 # (d) Drop IP yang sudah masuk blacklist - PALING ATAS
 add chain=input protocol=tcp dst-port=22,8291 connection-state=new \
-    src-address-list=ssh_blacklist action=drop comment="Drop brute force SSH/Winbox"
+    src-address-list=blacklist action=drop comment="Drop brute force SSH/Winbox"
 
 # (e) Logging koneksi baru SSH/Winbox
 add chain=input protocol=tcp dst-port=22,8291 connection-state=new action=log \
     log-prefix="LOGIN-ATTEMPT: " comment="Log percobaan akses SSH/Winbox"
 
 # (f) Anti brute-force bertahap: urutan stage3 -> stage2 -> stage1 -> new
-#     Address-list ssh_stage1/2/3 dan ssh_blacklist TIDAK perlu dibuat manual;
+#     Address-list ssh_stage1/2/3 dan blacklist TIDAK perlu dibuat manual;
 #     RouterOS otomatis membuatnya saat action add-src-to-address-list pertama
 #     kali ter-trigger oleh traffic yang cocok.
 add chain=input protocol=tcp dst-port=22,8291 connection-state=new \
     src-address-list=ssh_stage3 action=add-src-to-address-list \
-    address-list=ssh_blacklist address-list-timeout=1d comment="Stage 3 ke blacklist"
+    address-list=blacklist address-list-timeout=1d comment="Stage 3 ke blacklist"
 
 add chain=input protocol=tcp dst-port=22,8291 connection-state=new \
     src-address-list=ssh_stage2 action=add-src-to-address-list \
@@ -189,13 +214,65 @@ add chain=input protocol=tcp dst-port=22,8291 src-address=192.168.30.0/24 \
 add chain=input protocol=tcp dst-port=22,8291 action=drop \
     comment="Blok akses SSH/Winbox selain VLAN10 & VLAN30"
 
+# ---------------------------------------------------------------------
+# 9. HARDENING LAYANAN ROUTER
+#    - Nonaktifkan layanan yang tidak diperlukan (telnet, ftp, www, api)
+#    - Batasi SSH & Winbox hanya dari VLAN 10 dan VLAN 30
+#    - Zona waktu WIB dan NTP agar log berwaktu benar
+#    Password admin diatur MANUAL (lihat CATATAN PENTING di atas).
+# ---------------------------------------------------------------------
+/ip service
+disable telnet,ftp,www,api,api-ssl
+set ssh address=192.168.10.0/24,192.168.30.0/24
+set winbox address=192.168.10.0/24,192.168.30.0/24
+
+/system clock
+set time-zone-name=Asia/Jakarta
+
+# NTP memakai sintaks RouterOS 6 (primary-ntp). Pada RouterOS 7 sintaksnya
+# berbeda (/system ntp client servers add ...), maka dibungkus :do agar
+# /import tidak berhenti bila perintah ini gagal. Alamat NTP boleh diganti.
+:do { /system ntp client set enabled=yes primary-ntp=162.159.200.1 secondary-ntp=216.239.35.0 } on-error={ :log warning "NTP: atur manual (sintaks RouterOS 6 dan 7 berbeda)" }
+
+# ---------------------------------------------------------------------
+# 10. BATASI AKSES MAC-WINBOX / MAC-TELNET
+#     Firewall IP tidak berlaku untuk akses lewat MAC Address (layer 2),
+#     sehingga Siswa (VLAN 20) tetap bisa Winbox via MAC. Solusinya:
+#     MAC server hanya aktif pada interface list "Boleh-Winbox" yang
+#     berisi Guru_Admin, Server, dan ether3 (Host-Only admin).
+#     Interface Siswa, ether1 (WAN), dan ether2 (trunk) TIDAK dimasukkan.
+# ---------------------------------------------------------------------
+/interface list
+add name=Boleh-Winbox comment="Interface yang boleh MAC-Winbox dan MAC-Telnet"
+
+/interface list member
+add list=Boleh-Winbox interface=Guru_Admin
+add list=Boleh-Winbox interface=Server
+add list=Boleh-Winbox interface=ether3
+
+/tool mac-server
+set allowed-interface-list=Boleh-Winbox
+
+/tool mac-server mac-winbox
+set allowed-interface-list=Boleh-Winbox
+
+# (Opsional) sembunyikan router dari daftar Neighbors pada interface lain:
+# /ip neighbor discovery-settings set discover-interface-list=Boleh-Winbox
+
+# ---------------------------------------------------------------------
+# 11. BACKUP KONFIGURASI (bukti kebijakan backup)
+#     Hasil muncul di menu Files: router-config.rsc dan router-backup.backup
+# ---------------------------------------------------------------------
+/export file=router-config
+/system backup save name=router-backup
+
 :log info "=== KONFIGURASI ROUTER SELESAI DI-IMPORT ==="
 
 # =====================================================================
 #  VERIFIKASI (jalankan manual satu per satu di Terminal setelah import)
 #  Urutan LOGIS chain input (SSH/Winbox) setelah import (cek dengan
 #  '/ip firewall filter print chain=input'):
-#  1. drop jika src di ssh_blacklist
+#  1. drop jika src di blacklist
 #  2. log koneksi baru SSH/Winbox
 #  3. stage3 -> blacklist
 #  4. stage2 -> stage3
@@ -208,9 +285,9 @@ add chain=input protocol=tcp dst-port=22,8291 action=drop \
 #  UJI BRUTE-FORCE (dari VM Server, VLAN 30):
 #    for i in 1 2 3 4 5; do nc -zv -w 2 192.168.30.1 22; done
 #  Lalu di router: /ip firewall address-list print
-#  -> IP 192.168.30.10 harus muncul di ssh_blacklist.
+#  -> IP 192.168.30.10 harus muncul di blacklist.
 #  BERSIHKAN setelah uji (lewat Winbox/MAC-Winbox):
-#    /ip firewall address-list remove [find list=ssh_blacklist]
+#    /ip firewall address-list remove [find list=blacklist]
 # =====================================================================
 #  /interface vlan print
 #  /ip address print
@@ -218,12 +295,22 @@ add chain=input protocol=tcp dst-port=22,8291 action=drop \
 #  /ip firewall nat print
 #  /ip firewall filter print
 #  /snmp print
+#  /ip service print
+#  /system clock print
+#  /interface list member print
+#  /tool mac-server print
+#  /tool mac-server mac-winbox print
 #  /ping 8.8.8.8
 #
 #  Uji dari client (firewall Windows 7 harus mengizinkan ICMP):
 #  - PC VLAN 20 (Siswa)  -> ping ke VLAN 10 (Guru)   HARUS GAGAL
 #  - PC VLAN 10 (Guru)   -> ping ke VLAN 20 (Siswa)  HARUS BERHASIL
+#  - PC VLAN 20 (Siswa)  -> ping 8.8.8.8 / internet  HARUS GAGAL
+#  - PC VLAN 20 (Siswa)  -> ping/web Server .30.10   HARUS BERHASIL
+#  - PC VLAN 10 (Guru)   -> ping 8.8.8.8             HARUS BERHASIL
 #  - Server VLAN 30      -> ping ke VLAN 10 (Guru)   HARUS BERHASIL
 #  - Winbox/SSH dari VLAN 20 ke router               HARUS DITOLAK
 #  - Winbox/SSH dari VLAN 10/30 ke router            HARUS BERHASIL
+#  - MAC-Winbox dari Siswa ke router                 HARUS DITOLAK
+#  - MAC-Winbox dari Guru / Server / ether3          HARUS BERHASIL
 # =====================================================================
