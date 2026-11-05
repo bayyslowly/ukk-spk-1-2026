@@ -37,7 +37,7 @@ Total ada **5 VM** yang harus dibuat di hypervisor (VirtualBox / VMware / Proxmo
 | Interface | Tipe Adapter di Hypervisor | Fungsi |
 |---|---|---|
 | Ether1 | **NAT** (ke internet) | DHCP Client — akses internet |
-| Ether2 | **Internal Network**: `Router-Switch` | Trunk ke Switch (VLAN 10/20/30) |
+| Ether2 | **LAN Segment**: `Router-Switch` | Trunk ke Switch (VLAN 10/20/30) |
 | Ether3 | **Host-Only Adapter** | Akses Winbox langsung dari PC Admin |
 
 > 💡 Nama Internal Network (`Router-Switch`) harus **sama persis** dengan yang dipakai di Ether1 VM Switch pada langkah berikutnya, agar keduanya berada di segmen virtual yang sama.
@@ -61,10 +61,10 @@ Total ada **5 VM** yang harus dibuat di hypervisor (VirtualBox / VMware / Proxmo
 ### Network Interface (5 buah)
 | Interface | Tipe Adapter di Hypervisor | Fungsi |
 |---|---|---|
-| Ether1 | **Internal Network**: `Router-Switch` | Uplink trunk ke Router (sama dengan Ether2 Router) |
-| Ether2 | **Internal Network**: `Switch-Guru` | Access port VLAN 10 → ke VM Guru |
-| Ether3 | **Internal Network**: `Switch-Siswa` | Access port VLAN 20 → ke VM Siswa |
-| Ether4 | **Internal Network**: `Switch-Server` | Access port VLAN 30 → ke VM Server |
+| Ether1 | **LAN Segment**: `Router-Switch` | Uplink trunk ke Router (sama dengan Ether2 Router) |
+| Ether2 | **LAN Segment**: `Switch-Guru` | Access port VLAN 10 → ke VM Guru |
+| Ether3 | **LAN Segment**: `Switch-Siswa` | Access port VLAN 20 → ke VM Siswa |
+| Ether4 | **LAN Segment**: `Switch-Server` | Access port VLAN 30 → ke VM Server |
 | Ether5 | **Host-Only Adapter** | Akses Winbox langsung dari PC Admin |
 
 > 💡 Total ada 4 nama Internal Network berbeda yang harus disiapkan di hypervisor: `Router-Switch`, `Switch-Guru`, `Switch-Siswa`, `Switch-Server`.
@@ -88,7 +88,7 @@ Total ada **5 VM** yang harus dibuat di hypervisor (VirtualBox / VMware / Proxmo
 ### Network Interface (1 buah)
 | Interface | Tipe Adapter di Hypervisor | Fungsi |
 |---|---|---|
-| ens18 (atau sesuai penamaan hypervisor) | **Internal Network**: `Switch-Server` | Terhubung ke Ether4 Switch, IP Static `192.168.30.10/24` |
+| ens18 (atau sesuai penamaan hypervisor) | **LAN Segment**: `Switch-Server` | Terhubung ke Ether4 Switch, IP Static `192.168.30.10/24` |
 
 ### 📄 Panduan Konfigurasi
 Pilih **salah satu** metode berikut (hasil akhirnya sama):
@@ -111,7 +111,7 @@ Pilih **salah satu** metode berikut (hasil akhirnya sama):
 ### Network Interface (1 buah)
 | Interface | Tipe Adapter di Hypervisor | Fungsi |
 |---|---|---|
-| Network Adapter | **Internal Network**: `Switch-Guru` | Terhubung ke Ether2 Switch, DHCP Client dari VLAN 10 (192.168.10.0/24) |
+| Network Adapter | **LAN Segment**: `Switch-Guru` | Terhubung ke Ether2 Switch, DHCP Client dari VLAN 10 (192.168.10.0/24) |
 
 ### Konfigurasi
 1. Install Windows 7 seperti biasa.
@@ -147,7 +147,7 @@ Sama seperti VM Guru:
 ### Network Interface (1 buah)
 | Interface | Tipe Adapter di Hypervisor | Fungsi |
 |---|---|---|
-| Network Adapter | **Internal Network**: `Switch-Siswa` | Terhubung ke Ether3 Switch, DHCP Client dari VLAN 20 (192.168.20.0/24) |
+| Network Adapter | **LAN Segment**: `Switch-Siswa` | Terhubung ke Ether3 Switch, DHCP Client dari VLAN 20 (192.168.20.0/24) |
 
 ### Konfigurasi
 Sama seperti VM Guru — set DHCP Client, lalu tes:
