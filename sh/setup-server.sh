@@ -353,10 +353,7 @@ JSEOF
 chown -R www-data:www-data "${WEBROOT}"
 
 # --- Buat sertifikat self-signed untuk HTTPS ---
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/nginx/ssl/${DOMAIN}.key \
-    -out /etc/nginx/ssl/${DOMAIN}.crt \
-    -subj "/C=ID/ST=JawaTengah/L=Purwokerto/O=SMK/OU=TKJ/CN=${DOMAIN}"
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/${DOMAIN}.key -out /etc/nginx/ssl/${DOMAIN}.crt -subj "/C=ID/ST=JawaTengah/L=Purwokerto/O=SMK/OU=TKJ/CN=${DOMAIN}"
 
 # --- Virtual host nginx (HTTP redirect ke HTTPS + HTTPS) ---
 cat > /etc/nginx/sites-available/${DOMAIN} <<EOF
