@@ -360,10 +360,18 @@ netsh advfirewall firewall add rule name="Allow ICMPv4-In" protocol=icmpv4:8,any
 - Winbox/SSH ke router dari VLAN 20 **ditolak**, dari VLAN 10/30 **berhasil** ✅
 
 **Uji brute-force** (dari VM Server di VLAN 30):
+- Install paket netcat di server Anda sebelum uji brute-force:
+```bash
+sudo apt install netcat-openbsd
+```
+(Atau bisa juga menggunakan sudo apt install netcat-traditional)
+
+- Jalankan perintah loop nc Anda:
+
 ```bash
 for i in 1 2 3 4 5; do nc -zv -w 2 192.168.30.1 22; done
 ```
-Lalu di router, buka **IP → Firewall → Address Lists** (atau `/ip firewall address-list print`). IP `192.168.30.10` harus muncul di `ssh_blacklist`. Setelah uji, bersihkan agar Server tidak terblokir 1 hari:
+- Lalu di router, buka **IP → Firewall → Address Lists** (atau `/ip firewall address-list print`). IP `192.168.30.10` harus muncul di `ssh_blacklist`. Setelah uji, bersihkan agar Server tidak terblokir 1 hari:
 ```
 /ip firewall address-list remove [find list=ssh_blacklist]
 ```
